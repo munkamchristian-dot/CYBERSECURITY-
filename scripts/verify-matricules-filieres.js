@@ -49,107 +49,119 @@
         return "";
     }
 
-    console.log("🔎 Vérification des matricules...");
+    function exporterCSV(donnees) {
+        const lignes = [
+            ["Matricule", "Existe", "Nom", "Date de naissance", "Spécialité", "Filière concourue", "Lien"],
+            ...donnees.map(x => [
+                x.Matricule,
+                x.Existe,
+                x.Nom,
+                x.DateNaissance,
+                x.Specialite,
+                x.Filiere,
+                x.Lien
+            ])
+        ];
 
-    for (let i = debut; i <= fin; i++) {
-        const matricule = `26SP${String(i).padStart(5, "0")}`;
-        const url = `/registration-display-submit/SP/${matricule}`;
+        const csv = "﻿" + lignes
+            .map(ligne =>
+                ligne.map(cellule =>
+                    `"${String(cellule).replace(/"/g, '""')}"`
+                ).join(";")
+            )
+            .join("\n");
 
-        try {
-            const response = await fetch(url);
-            const html = await response.text();
+        const blob = new Blob([csv], {
+            type: "text/csv;charset=utf-8;"
+        });
 
-            const existe =
-                response.ok &&
-                html.includes(matricule) &&
-                html.includes("Inscription au concours");
+        const objectUrl = URL.createObjectURL(blob);
+        const debutTag = String(debut).padStart(5, "0");
+        const finTag = String(fin).padStart(5, "0");
 
-            let nom = "";
-            let dateNaissance = "";
-            let specialite = "";
-            let filiere = "";
+        const lien = document.createElement("a");
+        lien.href = objectUrl;
+        lien.download = `matricules_26SP${debutTag}_a_26SP${finTag}.csv`;
 
-            if (existe) {
-                const doc = new DOMParser().parseFromString(html, "text/html");
+        document.body.appendChild(lien);
+        lien.click();
+        lien.remove();
+        URL.revokeObjectURL(objectUrl);
 
-                nom = extraireChamp(doc, champsRecherches.Nom);
-                dateNaissance = extraireChamp(doc, champsRecherches.DateNaissance);
-                specialite = extraireChamp(doc, champsRecherches.Specialite);
-                filiere = extraireChamp(doc, champsRecherches.Filiere);
-            }
-
-            resultat.push({
-                Matricule: matricule,
-                Existe: existe ? "OUI" : "NON",
-                Nom: nom,
-                DateNaissance: dateNaissance,
-                Specialite: specialite,
-                Filiere: filiere,
-                Lien: existe
-                    ? new URL(url, window.location.origin).href
-                    : ""
-            });
-
-            console.log(
-                `${i}/150 — ${matricule} → ${existe ? "✅" : "❌"} ${nom} ${filiere}`
-            );
-
-        } catch (erreur) {
-            resultat.push({
-                Matricule: matricule,
-                Existe: "ERREUR",
-                Nom: "",
-                DateNaissance: "",
-                Specialite: "",
-                Filiere: "",
-                Lien: ""
-            });
-
-            console.log(`${i}/150 — ${matricule} → ⚠️ ERREUR`);
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 150));
+        console.log("📁 Fichier CSV téléchargé");
     }
 
-    // Export CSV compatible Excel
-    const lignes = [
-        ["Matricule", "Existe", "Nom", "Date de naissance", "Spécialité", "Filière concourue", "Lien"],
-        ...resultat.map(x => [
-            x.Matricule,
-            x.Existe,
-            x.Nom,
-            x.DateNaissance,
-            x.Specialite,
-            x.Filiere,
-            x.Lien
-        ])
-    ];
+    console.log("🔎 Vérification des matricules...");
 
-    const csv = "﻿" + lignes
-        .map(ligne =>
-            ligne.map(cellule =>
-                `"${String(cellule).replace(/"/g, '""')}"`
-            ).join(";")
-        )
-        .join("\n");
+    try {
+        for (let i = debut; i <= fin; i++) {
+            const matricule = `26SP${String(i).padStart(5, "0")}`;
+            const url = `/registration-display-submit/SP/${matricule}`;
 
-    const blob = new Blob([csv], {
-        type: "text/csv;charset=utf-8;"
-    });
+            try {
+                const response = await fetch(url);
+                const html = await response.text();
 
-    const lien = document.createElement("a");
-    lien.href = URL.createObjectURL(blob);
-    lien.download = "matricules_26SP00001_a_26SP00150.csv";
+                const existe =
+                    response.ok &&
+                    html.includes(matricule) &&
+                    html.includes("Inscription au concours");
 
-    document.body.appendChild(lien);
-    lien.click();
-    lien.remove();
+                let nom = "";
+                let dateNaissance = "";
+                let specialite = "";
+                let filiere = "";
 
-    console.log("================================");
-    console.log("✅ TERMINÉ");
-    console.log(`📊 ${resultat.length} matricules vérifiés`);
-    console.log("📁 Fichier CSV téléchargé");
-    console.log("================================");
+                if (existe) {
+                    const doc = new DOMParser().parseFromString(html, "text/html");
 
-    console.table(resultat);
+                    nom = extraireChamp(doc, champsRecherches.Nom);
+                    dateNaissance = extraireChamp(doc, champsRecherches.DateNaissance);
+                    specialite = extraireChamp(doc, champsRecherches.Specialite);
+                    filiere = extraireChamp(doc, champsRecherches.Filiere);
+                }
+
+                resultat.push({
+                    Matricule: matricule,
+                    Existe: existe ? "OUI" : "NON",
+                    Nom: nom,
+                    DateNaissance: dateNaissance,
+                    Specialite: specialite,
+                    Filiere: filiere,
+                    Lien: existe
+                        ? new URL(url, window.location.origin).href
+                        : ""
+                });
+
+                console.log(
+                    `${i}/150 — ${matricule} → ${existe ? "✅" : "❌"} ${nom} ${filiere}`
+                );
+
+            } catch (erreur) {
+                resultat.push({
+                    Matricule: matricule,
+                    Existe: "ERREUR",
+                    Nom: "",
+                    DateNaissance: "",
+                    Specialite: "",
+                    Filiere: "",
+                    Lien: ""
+                });
+
+                console.log(`${i}/150 — ${matricule} → ⚠️ ERREUR`);
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 150));
+        }
+    } finally {
+        // Le CSV est téléchargé même si la boucle s'arrête sur une erreur inattendue
+        exporterCSV(resultat);
+
+        console.log("================================");
+        console.log("✅ TERMINÉ");
+        console.log(`📊 ${resultat.length} matricules vérifiés`);
+        console.log("================================");
+
+        console.table(resultat);
+    }
 })();
