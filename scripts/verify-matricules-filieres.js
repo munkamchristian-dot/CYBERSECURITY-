@@ -86,9 +86,12 @@
         document.body.appendChild(lien);
         lien.click();
         lien.remove();
-        URL.revokeObjectURL(objectUrl);
 
-        console.log("📁 Fichier CSV téléchargé");
+        // Révocation différée : sur certains navigateurs, révoquer l'URL blob
+        // immédiatement après le clic annule le téléchargement avant qu'il ne démarre
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+
+        console.log("📁 Fichier CSV téléchargé (" + donnees.length + " lignes)");
     }
 
     console.log("🔎 Vérification des matricules...");
