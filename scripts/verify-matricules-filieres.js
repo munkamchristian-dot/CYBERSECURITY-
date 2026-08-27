@@ -22,7 +22,7 @@
  */
 (async () => {
     const debut = 1;
-    const fin = 150;
+    const fin = 215;
     const resultat = [];
 
     // Libellés recherchés pour chaque champ, du plus spécifique au plus générique
@@ -334,7 +334,7 @@
                 });
 
                 console.log(
-                    `${i}/150 — ${matricule} → ${existe ? "✅" : "❌"} ${nom} ${filiere} ${existe ? "[" + ficheArchivee + "]" : ""}`
+                    `${i}/${fin} — ${matricule} → ${existe ? "✅" : "❌"} ${nom} ${filiere} ${existe ? "[" + ficheArchivee + "]" : ""}`
                 );
 
             } catch (erreur) {
@@ -349,7 +349,7 @@
                     Lien: ""
                 });
 
-                console.log(`${i}/150 — ${matricule} → ⚠️ ERREUR`);
+                console.log(`${i}/${fin} — ${matricule} → ⚠️ ERREUR`);
             }
 
             await new Promise(resolve => setTimeout(resolve, 150));
