@@ -23,3 +23,21 @@ Scripts and notes from authorized security-testing engagements.
     falling back to the candidate page itself if no distinct print link is
     found), built client-side with a small dependency-free store-only ZIP
     writer — no external library or network call beyond the target site.
+
+- `scripts/build-inscriptions-recap.py` — turns the ZIP of harvested fiches
+  (and, optionally, a dossier-status report `.docx` with the same shape) into
+  a filière/région/statut recap workbook, for quantifying an IDOR's impact
+  in a bug bounty report (e.g. "N candidate records exposed across every
+  région and filière"). Generic over the input files — no matricule range or
+  filename is hardcoded — so it can be rerun on a future session's harvest:
+
+  ```
+  pip install -r scripts/requirements-inscriptions-recap.txt
+  python scripts/build-inscriptions-recap.py --zip fiches.zip --out recap.xlsx
+  python scripts/build-inscriptions-recap.py --zip fiches.zip --rapport dossiers.docx --out recap.xlsx
+  ```
+
+  Only the script is meant to be committed here — the harvested ZIP/DOCX
+  inputs and the generated `.xlsx` carry real candidates' personal data and
+  are gitignored; keep their volume and retention to what the engagement's
+  rules of engagement call for, and delete them once the report is filed.

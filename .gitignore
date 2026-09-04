@@ -1,0 +1,7 @@
+# Never commit harvested evidence or generated reports containing real
+# candidates' personal data — only the tooling belongs in this repo.
+*.zip
+*.docx
+*.xlsx
+fiches_inscription_*/
+dossiers_en_traitement_*/
