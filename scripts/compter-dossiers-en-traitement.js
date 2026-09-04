@@ -4,18 +4,9 @@
  * Authorized security-testing utility: reuses the same matricule sweep as
  * verify-matricules-filieres.js against the exam registration portal, but
  * instead of archiving each fiche, it checks — for every dossier that
- * exists — whether it is *actually* "en cours de traitement" or only
- * displayed as such while missing the pièces jointes (attachments)
- * required for real processing.
- *
- * A dossier is counted as "réellement en cours de traitement" (OK) only
- * when BOTH are true:
- *   - the status label on the page matches "en cours de traitement"
- *   - at least one attachment (pièce jointe) link is present on the page
- *
- * Every other matricule (dossier introuvable, statut différent, ou
- * dossier "en cours" affiché sans pièce jointe chargée) is classé PAS OK,
- * avec la raison associée.
+ * exists — whether its displayed status is "en cours de traitement" or
+ * not (a dossier without any pièce jointe uploaded never shows that
+ * status, so the status alone is enough to tell OK from PAS OK).
  *
  * Usage: run in the browser DevTools console while on the target origin,
  * inside the scope of an authorized penetration test / bug bounty
@@ -28,9 +19,10 @@
  * verify-matricules-filieres.js).
  *
  * Sorties générées : un CSV détaillé et un document Word (.docx) listant
- * séparément les matricules OK et PAS OK — le .docx est construit
- * entièrement côté client (mini écrivain ZIP + XML WordprocessingML),
- * sans dépendance externe ni appel réseau autre que vers le site cible.
+ * séparément les matricules OK (en cours de traitement) et PAS OK — le
+ * .docx est construit entièrement côté client (mini écrivain ZIP + XML
+ * WordprocessingML), sans dépendance externe ni appel réseau autre que
+ * vers le site cible.
  */
 (async () => {
     const debut = 1;
@@ -40,16 +32,6 @@
     // Libellés de statut recherchés sur la fiche du candidat
     const libelleStatutRegex = /statut|[ée]tat\s*du\s*dossier|situation\s*du\s*dossier/i;
     const enCoursDeTraitementRegex = /en\s*cours\s*de\s*traitement/i;
-
-    // Libellé indiquant explicitement l'absence de pièce jointe
-    const aucunePieceJointeRegex = /aucun(e)?\s*(pi[èe]ce\s*jointe|document|fichier)/i;
-
-    // Section "pièces jointes" sur la fiche
-    const libellePiecesJointesRegex = /pi[èe]ces?\s*jointes?|documents?\s*(joints?|transmis)/i;
-
-    // Extensions de fichiers typiquement utilisées pour les pièces jointes
-    // uploadées par le candidat (par opposition aux assets statiques du site)
-    const extensionPieceJointeRegex = /\.(pdf|jpe?g|png|gif|bmp|tiff?|docx?|xlsx?)(\?|#|$)/i;
 
     function extraireStatut(doc) {
         const elements = [...doc.querySelectorAll("input, select, textarea, td, th, label, p, span, div, strong, b")];
@@ -70,38 +52,6 @@
         }
 
         return "";
-    }
-
-    // Compte les liens vers des pièces jointes réellement uploadées : soit
-    // situés dans une zone étiquetée "pièces jointes"/"documents", soit
-    // pointant vers un fichier avec une extension de document/image.
-    function compterPiecesJointes(doc) {
-        const liens = [...doc.querySelectorAll("a[href]")];
-        const vus = new Set();
-
-        for (const lien of liens) {
-            const href = lien.getAttribute("href");
-
-            if (!href || href.startsWith("javascript:") || href === "#") {
-                continue;
-            }
-
-            const dansZonePiecesJointes = (() => {
-                let noeud = lien;
-                for (let profondeur = 0; noeud && profondeur < 4; profondeur++, noeud = noeud.parentElement) {
-                    if (libellePiecesJointesRegex.test(noeud.textContent || "")) {
-                        return true;
-                    }
-                }
-                return false;
-            })();
-
-            if (dansZonePiecesJointes || extensionPieceJointeRegex.test(href)) {
-                vus.add(href);
-            }
-        }
-
-        return vus.size;
     }
 
     function texteContient(doc, regex) {
@@ -233,14 +183,12 @@
 
     function exporterCSV(donnees) {
         const lignes = [
-            ["Matricule", "Existe", "Statut affiché", "Affiché en cours de traitement", "Pièces jointes", "Réellement en cours de traitement", "Raison", "Lien"],
+            ["Matricule", "Existe", "Statut affiché", "En cours de traitement", "Raison", "Lien"],
             ...donnees.map(x => [
                 x.Matricule,
                 x.Existe,
                 x.Statut,
-                x.AfficheEnCours,
-                x.NombrePiecesJointes,
-                x.ReellementEnCours,
+                x.EnCoursDeTraitement,
                 x.Raison,
                 x.Lien
             ])
@@ -310,8 +258,8 @@
         const finTag = String(fin).padStart(5, "0");
         const dateGeneration = new Date().toLocaleString("fr-FR");
 
-        const ok = donnees.filter(x => x.ReellementEnCours === "OUI");
-        const pasOk = donnees.filter(x => x.ReellementEnCours !== "OUI");
+        const ok = donnees.filter(x => x.EnCoursDeTraitement === "OUI");
+        const pasOk = donnees.filter(x => x.EnCoursDeTraitement !== "OUI");
 
         const corps = [
             paragrapheXml("Rapport de vérification des dossiers en cours de traitement", { gras: true, taille: 32, apres: 200 }),
@@ -321,13 +269,11 @@
             paragrapheXml("Résumé", { gras: true, taille: 26, apres: 160 }),
             paragrapheXml(`Matricules vérifiés : ${donnees.length}`, { taille: 20 }),
             paragrapheXml(`Dossiers existants : ${compteurs.dossiersExistants}`, { taille: 20 }),
-            paragrapheXml(`Affichent le statut "en cours de traitement" : ${compteurs.afficheEnCoursCount}`, { taille: 20 }),
-            paragrapheXml(`Sans pièce jointe chargée : ${compteurs.sansPieceJointeCount}`, { taille: 20 }),
-            paragrapheXml(`Dossiers OK — réellement en cours de traitement : ${ok.length}`, { gras: true, taille: 20 }),
+            paragrapheXml(`Dossiers OK — en cours de traitement : ${ok.length}`, { gras: true, taille: 20 }),
             paragrapheXml(`Dossiers PAS OK : ${pasOk.length}`, { gras: true, taille: 20, apres: 240 }),
 
             paragrapheXml(`Dossiers OK (${ok.length})`, { gras: true, taille: 26, apres: 160 }),
-            tableauXml(["Matricule", "Statut", "Pièces jointes", "Lien"], ok.map(x => [x.Matricule, x.Statut, String(x.NombrePiecesJointes), x.Lien])),
+            tableauXml(["Matricule", "Statut", "Lien"], ok.map(x => [x.Matricule, x.Statut, x.Lien])),
 
             paragrapheXml("", { avant: 240, apres: 0 }),
 
@@ -356,12 +302,10 @@
         console.log(`📄 Document Word téléchargé (${ok.length} OK / ${pasOk.length} pas OK)`);
     }
 
-    console.log("🔎 Vérification des dossiers réellement en cours de traitement...");
+    console.log("🔎 Vérification des dossiers en cours de traitement...");
 
     let dossiersExistants = 0;
-    let afficheEnCoursCount = 0;
-    let sansPieceJointeCount = 0;
-    let reellementEnCoursCount = 0;
+    let enCoursDeTraitementCount = 0;
 
     try {
         for (let i = debut; i <= fin; i++) {
@@ -378,9 +322,7 @@
                     html.includes("Inscription au concours");
 
                 let statut = "";
-                let afficheEnCours = false;
-                let nombrePiecesJointes = 0;
-                let aucunePieceJointeExplicite = false;
+                let enCoursDeTraitement = false;
 
                 if (existe) {
                     dossiersExistants++;
@@ -388,36 +330,18 @@
                     const doc = new DOMParser().parseFromString(html, "text/html");
 
                     statut = extraireStatut(doc);
-                    afficheEnCours = enCoursDeTraitementRegex.test(statut) || texteContient(doc, enCoursDeTraitementRegex);
-                    nombrePiecesJointes = compterPiecesJointes(doc);
-                    aucunePieceJointeExplicite = texteContient(doc, aucunePieceJointeRegex);
+                    enCoursDeTraitement = enCoursDeTraitementRegex.test(statut) || texteContient(doc, enCoursDeTraitementRegex);
 
-                    if (afficheEnCours) {
-                        afficheEnCoursCount++;
+                    if (enCoursDeTraitement) {
+                        enCoursDeTraitementCount++;
                     }
-
-                    if (nombrePiecesJointes === 0 || aucunePieceJointeExplicite) {
-                        sansPieceJointeCount++;
-                    }
-                }
-
-                const reellementEnCours =
-                    existe &&
-                    afficheEnCours &&
-                    nombrePiecesJointes > 0 &&
-                    !aucunePieceJointeExplicite;
-
-                if (reellementEnCours) {
-                    reellementEnCoursCount++;
                 }
 
                 let raison = "";
                 if (!existe) {
                     raison = "Dossier introuvable";
-                } else if (!afficheEnCours) {
+                } else if (!enCoursDeTraitement) {
                     raison = "Statut différent de \"en cours de traitement\"";
-                } else if (nombrePiecesJointes === 0 || aucunePieceJointeExplicite) {
-                    raison = "Aucune pièce jointe chargée";
                 } else {
                     raison = "OK";
                 }
@@ -426,9 +350,7 @@
                     Matricule: matricule,
                     Existe: existe ? "OUI" : "NON",
                     Statut: statut,
-                    AfficheEnCours: afficheEnCours ? "OUI" : "NON",
-                    NombrePiecesJointes: nombrePiecesJointes,
-                    ReellementEnCours: reellementEnCours ? "OUI" : "NON",
+                    EnCoursDeTraitement: enCoursDeTraitement ? "OUI" : "NON",
                     Raison: raison,
                     Lien: existe
                         ? new URL(url, window.location.origin).href
@@ -437,7 +359,7 @@
 
                 console.log(
                     `${i}/${fin} — ${matricule} → ${existe ? "✅" : "❌"} ` +
-                    (existe ? `[${statut || "statut inconnu"}] pj=${nombrePiecesJointes} → ${reellementEnCours ? "✔️ en traitement" : "⚠️ " + raison}` : "")
+                    (existe ? `[${statut || "statut inconnu"}] → ${enCoursDeTraitement ? "✔️ en traitement" : "⚠️ " + raison}` : "")
                 );
 
             } catch (erreur) {
@@ -445,9 +367,7 @@
                     Matricule: matricule,
                     Existe: "ERREUR",
                     Statut: "",
-                    AfficheEnCours: "NON",
-                    NombrePiecesJointes: 0,
-                    ReellementEnCours: "NON",
+                    EnCoursDeTraitement: "NON",
                     Raison: "Erreur réseau",
                     Lien: ""
                 });
@@ -458,7 +378,7 @@
             await new Promise(resolve => setTimeout(resolve, 150));
         }
     } finally {
-        const compteurs = { dossiersExistants, afficheEnCoursCount, sansPieceJointeCount, reellementEnCoursCount };
+        const compteurs = { dossiersExistants, enCoursDeTraitementCount };
 
         exporterCSV(resultat);
         exporterDocx(resultat, compteurs);
@@ -467,9 +387,7 @@
         console.log("✅ TERMINÉ");
         console.log(`📊 ${resultat.length} matricules vérifiés`);
         console.log(`📂 ${dossiersExistants} dossiers existants`);
-        console.log(`🏷️ ${afficheEnCoursCount} affichent le statut "en cours de traitement"`);
-        console.log(`📎 ${sansPieceJointeCount} dossiers sans pièce jointe chargée`);
-        console.log(`✔️ ${reellementEnCoursCount} dossiers RÉELLEMENT en cours de traitement (statut + pièce(s) jointe(s))`);
+        console.log(`✔️ ${enCoursDeTraitementCount} dossiers EN COURS DE TRAITEMENT`);
         console.log("================================");
 
         console.table(resultat);

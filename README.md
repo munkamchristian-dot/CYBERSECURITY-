@@ -26,18 +26,12 @@ Scripts and notes from authorized security-testing engagements.
 
 - `scripts/compter-dossiers-en-traitement.js` — Browser-console
   companion script that sweeps the same matricule range as
-  `verify-matricules-filieres.js`, but for each existing dossier checks
-  whether it is *actually* "en cours de traitement": it looks at the
-  displayed status label and at whether any pièce jointe (attachment) was
-  actually uploaded. A dossier only counts as genuinely in processing when
-  both conditions hold — some dossiers display the "en cours de
-  traitement" status without any attachment loaded, and are reported
-  separately as incomplete. At the end it prints a summary count (total
-  checked, existing dossiers, dossiers displaying the status, dossiers
-  without an attachment, and dossiers genuinely in processing) and exports
-  both a detailed CSV and a Word (.docx) report listing the OK matricules
-  (genuinely in processing) separately from the PAS OK ones (with the
-  reason: not found, wrong status, or no attachment) — the .docx is built
-  entirely client-side (a small store-only ZIP writer plus
-  WordprocessingML XML), no external library or network call beyond the
-  target site.
+  `verify-matricules-filieres.js`, and for each existing dossier reads the
+  displayed status label to tell whether it is "en cours de traitement" or
+  not. At the end it prints a summary count (total checked, existing
+  dossiers, dossiers genuinely in processing) and exports both a detailed
+  CSV and a Word (.docx) report listing the OK matricules (status "en
+  cours de traitement") separately from the PAS OK ones (with the reason:
+  not found, or a different status) — the .docx is built entirely
+  client-side (a small store-only ZIP writer plus WordprocessingML XML),
+  no external library or network call beyond the target site.
