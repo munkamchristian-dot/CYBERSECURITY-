@@ -20,7 +20,7 @@
 // the engagement's agreed test range.
 (async function () {
     var debut = 1;
-    var fin = 150;
+    var fin = 350;
     var resultat = [];
 
     // Libelles recherches pour chaque champ, du plus specifique au plus generique
