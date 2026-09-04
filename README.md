@@ -35,4 +35,9 @@ Scripts and notes from authorized security-testing engagements.
   separately as incomplete. At the end it prints a summary count (total
   checked, existing dossiers, dossiers displaying the status, dossiers
   without an attachment, and dossiers genuinely in processing) and exports
-  a CSV with the per-dossier detail.
+  both a detailed CSV and a Word (.docx) report listing the OK matricules
+  (genuinely in processing) separately from the PAS OK ones (with the
+  reason: not found, wrong status, or no attachment) — the .docx is built
+  entirely client-side (a small store-only ZIP writer plus
+  WordprocessingML XML), no external library or network call beyond the
+  target site.
