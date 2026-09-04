@@ -34,7 +34,7 @@
  */
 (async () => {
     const debut = 1;
-    const fin = 150;
+    const fin = 338;
     const resultat = [];
 
     // Libellés de statut recherchés sur la fiche du candidat
