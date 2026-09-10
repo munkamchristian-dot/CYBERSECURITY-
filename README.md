@@ -9,15 +9,17 @@ Scripts and notes from authorized security-testing engagements.
   IDOR (Insecure Direct Object Reference) finding on an exam registration
   portal: a sequential/guessable registration number (`matricule`) in the
   URL returns another candidate's record (including their name, date of
-  birth, spécialité and filière) to any unauthenticated visitor, with no
-  ownership check on the requester.
+  birth, spécialité, filière and dossier processing status) to any
+  unauthenticated visitor, with no ownership check on the requester.
 
   Run it in the browser DevTools console **only** while working within the
   scope of an engagement you are explicitly authorized for, and only for the
   volume of evidence the engagement's rules of engagement call for. It
   exports two files as findings-report evidence:
   - a CSV summary (matricule, existence, nom, date de naissance, spécialité,
-    filière, whether the fiche was archived, and the direct link);
+    filière, statut du dossier — "En cours de traitement" when the page
+    shows that mention, blank otherwise — whether the fiche was archived,
+    and the direct link);
   - a ZIP archive containing each exposed candidate's printable "fiche
     d'inscription" (fetched via the "Imprimer la fiche d'inscription" link,
     falling back to the candidate page itself if no distinct print link is

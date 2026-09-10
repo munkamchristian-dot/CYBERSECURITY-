@@ -4,8 +4,9 @@
  * Authorized security-testing utility: bulk-checks a range of exam
  * registration numbers (matricules) against a registration portal to
  * confirm whether an IDOR (Insecure Direct Object Reference) exposes
- * candidate records — including name, date of birth, spécialité and
- * filière — to any unauthenticated visitor who can guess a sequential ID.
+ * candidate records — including name, date of birth, spécialité,
+ * filière and processing status ("en cours de traitement") — to any
+ * unauthenticated visitor who can guess a sequential ID.
  *
  * For each record found, it also follows the "Imprimer la fiche
  * d'inscription" link and archives the printable fiche (PDF or HTML)
@@ -34,6 +35,16 @@
     };
 
     const lienImpressionRegex = /imprimer\s*(la)?\s*fiche\s*d.?inscription/i;
+
+    // Mention affichée en bas de page uniquement quand le dossier est soumis ;
+    // absente sinon (pas de champ "valeur" dédié à extraire, juste sa présence)
+    const statutTraitementRegex = /en\s*cours\s*de\s*traitement/i;
+
+    function detecterStatutDossier(doc) {
+        return statutTraitementRegex.test(doc.body.textContent)
+            ? "En cours de traitement"
+            : "";
+    }
 
     function extraireChamp(doc, regex) {
         const elements = [...doc.querySelectorAll("input, select, textarea, td, th, label, p, span, div")];
@@ -204,7 +215,7 @@
 
     function exporterCSV(donnees) {
         const lignes = [
-            ["Matricule", "Existe", "Nom", "Date de naissance", "Spécialité", "Filière concourue", "Fiche archivée", "Lien"],
+            ["Matricule", "Existe", "Nom", "Date de naissance", "Spécialité", "Filière concourue", "Statut du dossier", "Fiche archivée", "Lien"],
             ...donnees.map(x => [
                 x.Matricule,
                 x.Existe,
@@ -212,6 +223,7 @@
                 x.DateNaissance,
                 x.Specialite,
                 x.Filiere,
+                x.StatutDossier,
                 x.FicheArchivee,
                 x.Lien
             ])
@@ -301,6 +313,7 @@
                 let dateNaissance = "";
                 let specialite = "";
                 let filiere = "";
+                let statutDossier = "";
                 let ficheArchivee = "NON";
 
                 if (existe) {
@@ -310,6 +323,7 @@
                     dateNaissance = extraireChamp(doc, champsRecherches.DateNaissance);
                     specialite = extraireChamp(doc, champsRecherches.Specialite);
                     filiere = extraireChamp(doc, champsRecherches.Filiere);
+                    statutDossier = detecterStatutDossier(doc);
 
                     try {
                         await archiverFiche(doc, html, matricule);
@@ -327,6 +341,7 @@
                     DateNaissance: dateNaissance,
                     Specialite: specialite,
                     Filiere: filiere,
+                    StatutDossier: statutDossier,
                     FicheArchivee: ficheArchivee,
                     Lien: existe
                         ? new URL(url, window.location.origin).href
@@ -334,7 +349,7 @@
                 });
 
                 console.log(
-                    `${i}/150 — ${matricule} → ${existe ? "✅" : "❌"} ${nom} ${filiere} ${existe ? "[" + ficheArchivee + "]" : ""}`
+                    `${i}/150 — ${matricule} → ${existe ? "✅" : "❌"} ${nom} ${filiere} ${statutDossier ? "[" + statutDossier + "]" : ""} ${existe ? "[" + ficheArchivee + "]" : ""}`
                 );
 
             } catch (erreur) {
@@ -345,6 +360,7 @@
                     DateNaissance: "",
                     Specialite: "",
                     Filiere: "",
+                    StatutDossier: "",
                     FicheArchivee: "NON",
                     Lien: ""
                 });
