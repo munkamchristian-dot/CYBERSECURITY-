@@ -5,8 +5,9 @@
  * registration numbers (matricules) against a registration portal to
  * confirm whether an IDOR (Insecure Direct Object Reference) exposes
  * candidate records — including name, date of birth, spécialité,
- * filière and processing status ("en cours de traitement") — to any
- * unauthenticated visitor who can guess a sequential ID.
+ * filière and dossier processing status ("en cours de traitement",
+ * "REJETÉ POUR <motif>", or none) — to any unauthenticated visitor
+ * who can guess a sequential ID.
  *
  * For each record found, it also follows the "Imprimer la fiche
  * d'inscription" link and archives the printable fiche (PDF or HTML)
@@ -36,11 +37,26 @@
 
     const lienImpressionRegex = /imprimer\s*(la)?\s*fiche\s*d.?inscription/i;
 
-    // Mention affichée en bas de page uniquement quand le dossier est soumis ;
-    // absente sinon (pas de champ "valeur" dédié à extraire, juste sa présence)
+    // Mentions affichées en bas de page selon l'état du dossier :
+    // "en cours de traitement", "REJETÉ POUR <motif>", ou rien du tout
     const statutTraitementRegex = /en\s*cours\s*de\s*traitement/i;
+    const statutRejetRegex = /rejet[ée]e?\s*pour\s*[:\-]?\s*([\s\S]{1,300})/i;
 
     function detecterStatutDossier(doc) {
+        // Préfère les éléments "feuilles" (sans enfant élément) pour éviter
+        // de capturer le texte de toute la page dans le motif de rejet
+        const feuilles = [...doc.querySelectorAll("p, div, span, td, th, li, label")]
+            .filter(element => element.children.length === 0);
+
+        for (const element of feuilles) {
+            const texte = element.textContent.replace(/\s+/g, " ").trim();
+            const correspondanceRejet = texte.match(statutRejetRegex);
+
+            if (correspondanceRejet && correspondanceRejet[1]) {
+                return `REJETÉ POUR ${correspondanceRejet[1].trim()}`;
+            }
+        }
+
         return statutTraitementRegex.test(doc.body.textContent)
             ? "En cours de traitement"
             : "";
