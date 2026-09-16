@@ -22,7 +22,7 @@
  */
 (async () => {
     const debut = 1;
-    const fin = 600;
+    const fin = 700;
     const resultat = [];
 
     // Libellés recherchés pour chaque champ, du plus spécifique au plus générique
